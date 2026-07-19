@@ -4,122 +4,88 @@
 
 ```mermaid
 erDiagram
-    AIRPORT ||--o{ FLIGHT : "departure airport"
-    AIRPORT ||--o{ FLIGHT : "arrival airport"
-    PASSENGER ||--o{ BOOKING : makes
-    FLIGHT ||--o{ BOOKING : receives
-    BOOKING ||--o{ BAGGAGE : includes
+    AIRPORT ||--o{ FLIGHT_SCHEDULE : "departure airport"
+    AIRPORT ||--o{ FLIGHT_SCHEDULE : "arrival airport"
+    FLIGHT_SCHEDULE ||--o{ FLIGHT_INSTANCE : "occurs as"
+    AIRCRAFT ||--o{ FLIGHT_INSTANCE : operates
+    PASSENGER ||--o{ TICKET : owns
+    TICKET ||--o{ TICKET_SEGMENT : contains
+    FLIGHT_INSTANCE ||--o{ TICKET_SEGMENT : reserved_on
+    TICKET ||--o{ BAGGAGE : includes
+    BAGGAGE ||--o{ BAGGAGE_SEGMENT : travels_on
+    TICKET_SEGMENT ||--o{ BAGGAGE_SEGMENT : carries
     STAFF ||--o{ FLIGHT_STAFF_ASSIGNMENT : receives
-    FLIGHT ||--o{ FLIGHT_STAFF_ASSIGNMENT : has
-
-    AIRPORT {
-        int airport_id PK
-        string iata_code UK
-        string name
-        string city
-        string country
-    }
-    PASSENGER {
-        int passenger_id PK
-        string first_name
-        string last_name
-        date date_of_birth
-        string email UK
-        string phone
-        string passport_number UK
-    }
-    FLIGHT {
-        int flight_id PK
-        string flight_number UK
-        int departure_airport_id FK
-        int arrival_airport_id FK
-        datetime departure_time
-        datetime arrival_time
-        int total_seats
-        string status
-    }
-    BOOKING {
-        int booking_id PK
-        int passenger_id FK
-        int flight_id FK
-        string seat_number
-        datetime booked_at
-        string booking_status
-    }
-    BAGGAGE {
-        int baggage_id PK
-        int booking_id FK
-        string tag_number UK
-        decimal weight_kg
-        string baggage_status
-    }
-    STAFF {
-        int staff_id PK
-        string first_name
-        string last_name
-        string email UK
-        string phone
-        string job_title
-    }
-    FLIGHT_STAFF_ASSIGNMENT {
-        int assignment_id PK
-        int flight_id FK
-        int staff_id FK
-        string duty
-    }
+    FLIGHT_INSTANCE ||--o{ FLIGHT_STAFF_ASSIGNMENT : has
 ```
 
 ## Tables and Key Decisions
 
 ### Airport
 
-Stores each airport once. A flight refers to two airport records: one for departure and one for arrival.
+`airport_id` is the primary key. `iata_code` is unique. Airport name, city, and country are stored once, while flight schedules use airport foreign keys.
 
 ### Passenger
 
-Stores personal and contact information for each passenger. `email` and `passport_number` must be unique when provided.
+`passenger_id` is the primary key. The table stores first name, last name, date of birth, email, phone number, and passport number. Email and passport number must be unique when provided.
 
-### Flight
+### Aircraft
 
-Stores a flight's schedule, capacity, and operational status. It uses foreign keys for the departure and arrival airports. Available seats are calculated from active bookings instead of stored separately, which avoids inconsistent seat counts.
+`aircraft_id` is the primary key. `registration_number` is unique and identifies the physical aircraft. The table also stores model and capacity. Capacity belongs here because the aircraft assigned to a flight can change.
 
-### Booking
+### Flight Schedule
 
-Connects one passenger to one flight. Each booking has one seat number. The combination of `flight_id` and `seat_number` must be unique so that two passengers cannot receive the same seat.
+`schedule_id` is the primary key. A schedule represents a repeatable service, such as AA123 travelling from JFK to LAX. It stores `airline_code`, `flight_number`, `departure_airport_id`, and `arrival_airport_id`.
+
+### Flight Instance
+
+`instance_id` is the primary key. A flight instance represents one real operation of a schedule on a particular date. It stores `schedule_id`, `aircraft_id`, scheduled departure and arrival datetimes, and operational status. This table prevents the incorrect assumption that a flight number appears only once in the system.
+
+### Ticket
+
+`ticket_id` is the primary key. A ticket stores one passenger's overall purchase through `passenger_id`, a unique `booking_reference`, booking time, and ticket status. This project deliberately models one passenger per ticket to keep the scope manageable.
+
+### Ticket Segment
+
+`segment_id` is the primary key. Each row represents one flight leg in a ticket. It stores `ticket_id`, `flight_instance_id`, `segment_number`, `seat_number`, `cabin_class`, `ticket_price`, and segment status. A direct journey has one segment; a journey with a layover has two or more.
 
 ### Baggage
 
-Stores baggage for a booking. It does not store `passenger_id` or `flight_id`, because both can be obtained through the booking; avoiding those duplicate columns helps keep the design normalized.
+`baggage_id` is the primary key. A baggage record belongs to a ticket through `ticket_id` and stores a unique tag number, weight, and overall baggage status. This records ownership and allowance without duplicating passenger data.
+
+### Baggage Segment
+
+`baggage_segment_id` is the primary key. This junction table links a physical bag to each ticket segment on which it travels. It stores `baggage_id`, `ticket_segment_id`, load status, `loaded_at`, and `unloaded_at`. A connecting journey therefore has one baggage-segment row for each flight leg.
 
 ### Staff
 
-Stores airport staff and each staff member's job title.
+`staff_id` is the primary key. The table stores staff name, email, phone number, and job title.
 
 ### Flight Staff Assignment
 
-Connects staff to flights. This junction table supports the many-to-many relationship: a flight can have several staff members, and a staff member can work on many flights.
+`assignment_id` is the primary key. This junction table links staff to a specific `flight_instance`, with a duty such as gate agent, cabin crew, or baggage handler. It supports many staff on one flight and many flight assignments for one staff member.
 
-## Relationship Summary
+## Important Constraints
 
-| Relationship | Meaning |
+| Constraint | Reason |
 |---|---|
-| Airport to Flight | One airport can be the departure or arrival airport for many flights. |
-| Passenger to Booking | One passenger can create many bookings. |
-| Flight to Booking | One flight can have many bookings. |
-| Booking to Baggage | One booking can have zero or more baggage items. |
-| Staff to Flight | Many-to-many, resolved by `flight_staff_assignment`. |
+| `UNIQUE(schedule_id, scheduled_departure_time)` | Prevents the same schedule being created twice for the same time. |
+| `UNIQUE(ticket_id, segment_number)` | Keeps each ticket's flight legs in a clear order. |
+| `UNIQUE(flight_instance_id, seat_number)` | Prevents one seat being assigned twice on the same flight instance. |
+| `UNIQUE(baggage_id, ticket_segment_id)` | Prevents the same bag being added twice to the same flight leg. |
+| `UNIQUE(staff_id, flight_instance_id)` | Prevents duplicate staff assignments for one flight operation. |
 
 ## 3NF Check
 
-1. **First Normal Form (1NF):** Every column holds one value; repeating groups are separated into rows.
-2. **Second Normal Form (2NF):** Every non-key column describes the row's whole primary key.
-3. **Third Normal Form (3NF):** Non-key columns do not depend on other non-key columns. For example, baggage does not repeat passenger or flight data, and flight records refer to airport records rather than duplicating airport details.
+1. **First Normal Form (1NF):** Each column holds one value. Multiple flight legs and multiple baggage movements are represented by separate rows.
+2. **Second Normal Form (2NF):** Every non-key column describes the full row. For example, `loaded_at` describes one bag on one ticket segment.
+3. **Third Normal Form (3NF):** Data is not duplicated across tables. Airport details are not repeated in flight schedules; aircraft capacity is not repeated in flight instances; passenger and flight details are not repeated in baggage records.
 
 ## Rules to Enforce Later in MySQL
 
-- A flight's departure and arrival airports must be different.
-- `arrival_time` must be later than `departure_time`.
-- `total_seats` must be greater than zero.
-- A seat can be assigned only once per flight.
-- Baggage must refer to an existing booking.
-- A booking can be created only when active bookings are fewer than `total_seats`; this will be handled in a transaction.
+- Departure and arrival airports must be different.
+- Scheduled arrival must be later than scheduled departure.
+- Aircraft capacity must be greater than zero.
+- A seat can be assigned only once per flight instance.
+- A ticket segment must refer to an existing ticket and flight instance.
+- A baggage segment must refer to existing baggage and a ticket segment.
+- A ticket segment can be created only when assigned seats are fewer than the capacity of the instance's aircraft. This check will use a database transaction.
