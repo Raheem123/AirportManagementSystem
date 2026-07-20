@@ -1,0 +1,3 @@
+db.url=jdbc:mysql://localhost:3306/airport_management_system?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+db.username=root
+db.password=121212Raheem$
