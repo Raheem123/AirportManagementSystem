@@ -44,7 +44,7 @@ public class PassengerFrame extends JFrame {
 
     public PassengerFrame() {
         setTitle("Airport Management System - Passengers");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setSize(1050, 650);
         setLocationRelativeTo(null);
 
