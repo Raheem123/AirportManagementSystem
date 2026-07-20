@@ -1,24 +1,11 @@
 package com.airportmanagement;
 
-import com.airportmanagement.dao.PassengerDao;
-import com.airportmanagement.model.Passenger;
+import com.airportmanagement.ui.PassengerFrame;
 
-import java.sql.SQLException;
+import javax.swing.SwingUtilities;
 
 public class Application {
     public static void main(String[] args) {
-        PassengerDao passengerDao = new PassengerDao();
-
-        try {
-            for (Passenger passenger : passengerDao.findAll()) {
-                System.out.println(
-                        passenger.getPassengerId() + " | "
-                                + passenger.getFirstName() + " " + passenger.getLastName()
-                );
-            }
-        } catch (SQLException exception) {
-            System.err.println("Unable to load passengers from the database.");
-            exception.printStackTrace();
-        }
+        SwingUtilities.invokeLater(() -> new PassengerFrame().setVisible(true));
     }
 }
